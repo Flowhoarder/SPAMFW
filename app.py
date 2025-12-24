@@ -2,7 +2,7 @@ import sqlite3
 import imaplib
 import email
 import re
-import socket  # Nouvel import nécessaire pour le correctif réseau
+import socket
 from datetime import datetime
 from flask import Flask, render_template_string, request
 
@@ -14,8 +14,8 @@ DB_NAME = "propipo_live.db"
 # ==========================================
 IMAP_SERVER = "outlook.office365.com"
 EMAIL_USER = "spamfw@hotmail.com"
-# ⚠️ Mettez votre nouveau mot de passe d'application ici
-EMAIL_PASSWORD = "VOTRE_NOUVEAU_MOT_DE_PASSE" 
+# ⚠️ REMETTEZ VOTRE MOT DE PASSE ICI
+EMAIL_PASSWORD = "iiejumgnaitrqapl" 
 # ==========================================
 
 # --- 1. BASE DE DONNÉES ---
@@ -27,29 +27,29 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- 2. CONNEXION ET ANALYSE (CORRIGÉ IPV4) ---
+# --- 2. CONNEXION ET ANALYSE (METHODE DOUCE IPV4) ---
 def check_mail_and_update():
     new_reports = 0
     try:
-        # --- CORRECTIF RÉSEAU : FORCER IPV4 ---
-        # On sauvegarde la méthode socket d'origine
-        original_socket = socket.socket
-        
+        # --- NOUVEAU CORRECTIF STABLE ---
+        # Au lieu de casser le socket, on filtre juste les adresses IP
+        # pour ignorer l'IPv6 qui pose problème avec Outlook
+        allowed_families = (socket.AF_INET,)
+        original_getaddrinfo = socket.getaddrinfo
+
+        def ipv4_only_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+            # On force la famille à AF_INET (IPv4)
+            return original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
+
+        # On applique le filtre
+        socket.getaddrinfo = ipv4_only_getaddrinfo
+
         try:
-            # On remplace temporairement socket.socket pour forcer AF_INET (IPv4)
-            # Cela empêche Python d'essayer de se connecter en IPv6 qui peut être instable
-            def ipv4_socket(*args, **kwargs):
-                return original_socket(socket.AF_INET, socket.SOCK_STREAM)
-            
-            socket.socket = ipv4_socket
-            
-            # Connexion IMAP
+            # Connexion IMAP (utilisera maintenant uniquement l'IPv4)
             mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-            
         finally:
-            # On restaure le comportement normal immédiatement après la connexion
-            # pour ne pas perturber Flask ou d'autres parties du code
-            socket.socket = original_socket
+            # On remet tout comme avant immédiatement pour ne rien casser d'autre
+            socket.getaddrinfo = original_getaddrinfo
         # --------------------------------------
 
         mail.login(EMAIL_USER, EMAIL_PASSWORD)
@@ -90,7 +90,6 @@ def check_mail_and_update():
                     except Exception:
                         continue
             except Exception:
-                # Si le dossier junk n'existe pas ou erreur de sélection, on passe au suivant
                 continue
 
         mail.close()
@@ -183,7 +182,7 @@ HTML_PAGE = """
 
 <div class="container">
     <div class="logo-container">
-        <a href="/"><img src="/static/logo_spamfw.png" alt="SpamFW" class="site-logo"></a>
+        <a href="/"><img src="https://via.placeholder.com/250x80?text=SpamFW" alt="SpamFW" class="site-logo"></a>
     </div>
 
     <div class="actions-box">
@@ -235,11 +234,9 @@ def home():
     c = conn.cursor()
     
     if query:
-        # Recherche
         sql = "SELECT * FROM reports WHERE scammer_email LIKE ? OR scammer_name LIKE ? ORDER BY count DESC"
         c.execute(sql, ('%'+query+'%', '%'+query+'%'))
     else:
-        # Défaut : 10 derniers jours uniquement
         c.execute("SELECT * FROM reports WHERE last_seen >= date('now', '-10 days') ORDER BY count DESC LIMIT 100")
         
     rows = c.fetchall()
@@ -255,13 +252,8 @@ def update():
     rows = c.fetchall()
     conn.close()
     return render_template_string(HTML_PAGE, rows=rows, msg=msg, query='')
+
 if __name__ == '__main__':
     init_db()
-    # Koyeb a besoin du port 8080 et de l'adresse 0.0.0.0
+    # Koyeb a impérativement besoin de ça :
     app.run(host='0.0.0.0', port=8080)
-
-if __name__ == '__main__':
-    init_db()
-    # Si vous êtes sur Docker, utilisez host='0.0.0.0' pour être accessible
-
-    app.run(debug=True, host='0.0.0.0', port=8080)
