@@ -15,7 +15,7 @@ DB_NAME = "propipo_live.db"
 IMAP_SERVER = "outlook.office365.com"
 EMAIL_USER = "spamfw@hotmail.com"
 # ⚠️ REMETTEZ VOTRE MOT DE PASSE ICI
-EMAIL_PASSWORD = "cxgzraiybkwhqxoq" 
+EMAIL_PASSWORD = "fmphdbqipyefdtug" 
 # ==========================================
 
 # --- 1. BASE DE DONNÉES ---
@@ -257,4 +257,5 @@ if __name__ == '__main__':
     init_db()
     # Koyeb a impérativement besoin de ça :
     app.run(host='0.0.0.0', port=8080)
+
 
