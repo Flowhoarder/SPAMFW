@@ -85,7 +85,7 @@ def check_mail_and_update():
         socket.getaddrinfo = ipv4_only_getaddrinfo
 
         try:
-            mail = imaplib.IMAP4_SSL(IMAP_SERVER)
+            mail = imaplib.IMAP4_SSL(IMAP_SERVER, 993)
         finally:
             socket.getaddrinfo = original_getaddrinfo
         
@@ -249,4 +249,5 @@ def update():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
+
 
