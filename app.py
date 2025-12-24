@@ -14,249 +14,100 @@ DB_NAME = "propipo_live.db"
 # ==========================================
 IMAP_SERVER = "outlook.office365.com"
 EMAIL_USER = "spamfw@hotmail.com"
-# ⚠️ REMETTEZ VOTRE MOT DE PASSE ICI
-EMAIL_PASSWORD = "oxtgprzhozhbquep" 
+EMAIL_PASSWORD = "VOTRE_MOT_DE_PASSE_D_APPLICATION" 
 # ==========================================
 
 # --- 1. BASE DE DONNÉES ---
 def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS reports 
-                 (scammer_email TEXT PRIMARY KEY, scammer_name TEXT, count INTEGER, last_seen DATE)''')
-    conn.commit()
-    conn.close()
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS reports 
+                     (scammer_email TEXT PRIMARY KEY, scammer_name TEXT, count INTEGER, last_seen DATE)''')
+        conn.commit()
+        conn.close()
+        print("Base de données initialisée avec succès.")
+    except Exception as e:
+        print(f"Erreur d'initialisation DB: {e}")
 
-# --- 2. CONNEXION ET ANALYSE (METHODE DOUCE IPV4) ---
+# 🔥 CRUCIAL : On lance l'initialisation TOUT DE SUITE (pas à la fin)
+init_db()
+
+# --- 2. CONNEXION ET ANALYSE ---
 def check_mail_and_update():
+    # ... (Le reste de votre code ne change pas) ...
+    # Je ne recopie pas tout pour ne pas saturer,
+    # gardez votre fonction check_mail_and_update telle quelle.
     new_reports = 0
     try:
-        # --- NOUVEAU CORRECTIF STABLE ---
-        # Au lieu de casser le socket, on filtre juste les adresses IP
-        # pour ignorer l'IPv6 qui pose problème avec Outlook
         allowed_families = (socket.AF_INET,)
         original_getaddrinfo = socket.getaddrinfo
-
         def ipv4_only_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
-            # On force la famille à AF_INET (IPv4)
             return original_getaddrinfo(host, port, socket.AF_INET, type, proto, flags)
-
-        # On applique le filtre
         socket.getaddrinfo = ipv4_only_getaddrinfo
-
         try:
-            # Connexion IMAP (utilisera maintenant uniquement l'IPv4)
             mail = imaplib.IMAP4_SSL(IMAP_SERVER)
         finally:
-            # On remet tout comme avant immédiatement pour ne rien casser d'autre
             socket.getaddrinfo = original_getaddrinfo
-        # --------------------------------------
-
-        mail.login(EMAIL_USER, EMAIL_PASSWORD)
-
-        # On vérifie les deux dossiers principaux
-        folders_to_check = ["inbox", "junk"]
-
-        for folder in folders_to_check:
-            try:
-                mail.select(folder)
-                status, messages = mail.search(None, "UNSEEN")
-                
-                if not messages or messages[0] == b'':
-                    continue
-
-                email_ids = messages[0].split()
-
-                for e_id in email_ids:
-                    try:
-                        res, msg_data = mail.fetch(e_id, "(RFC822)")
-                        for response_part in msg_data:
-                            if isinstance(response_part, tuple):
-                                msg = email.message_from_bytes(response_part[1])
-                                body = ""
-                                if msg.is_multipart():
-                                    for part in msg.walk():
-                                        if part.get_content_type() == "text/plain":
-                                            try: body = part.get_payload(decode=True).decode()
-                                            except: pass
-                                else:
-                                    try: body = msg.get_payload(decode=True).decode()
-                                    except: pass
-
-                                name, email_addr = extract_scammer_info(body)
-                                if email_addr:
-                                    save_to_db(name, email_addr)
-                                    new_reports += 1
-                    except Exception:
-                        continue
-            except Exception:
-                continue
-
-        mail.close()
-        mail.logout()
         
+        mail.login(EMAIL_USER, EMAIL_PASSWORD)
+        
+        # ... suite de la fonction ...
+        # (Assurez-vous d'avoir le reste du code ici)
+        # ...
+        
+        mail.logout()
         if new_reports == 0:
             return "Rien à signaler (Inbox & Spam vérifiés)."
-        return f"Mise à jour : {new_reports} ajouts (depuis Inbox et Spam)."
-
+        return f"Mise à jour : {new_reports} ajouts."
     except Exception as e:
         return f"Erreur : {str(e)}"
 
-# --- 3. EXTRACTION ---
-def extract_scammer_info(text):
-    if not text: return None, None
-    
-    # Regex pour "Nom <email>"
-    pattern = r"(?:De|From)\s?:\s?(.*?)\s?<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>"
-    match = re.search(pattern, text, re.IGNORECASE)
-    if match:
-        raw_name = match.group(1).replace('"', '').strip()
-        email_addr = match.group(2).lower().strip()
-        if "spamfw" in email_addr: return None, None
-        if not raw_name: raw_name = "Inconnu"
-        return raw_name, email_addr
-        
-    # Regex pour "email" simple
-    pattern_simple = r"(?:De|From)\s?:\s?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})"
-    match_simple = re.search(pattern_simple, text, re.IGNORECASE)
-    if match_simple:
-        email_addr = match_simple.group(1).lower().strip()
-        if "spamfw" in email_addr: return None, None
-        return "Inconnu", email_addr
-    return None, None
+# ... (Gardez vos fonctions extract_scammer_info et save_to_db) ...
 
-# --- 4. SAUVEGARDE ---
-def save_to_db(name, email):
-    conn = sqlite3.connect(DB_NAME)
-    c = conn.cursor()
-    today = datetime.now().strftime("%Y-%m-%d")
-    
-    c.execute("SELECT * FROM reports WHERE scammer_email=?", (email,))
-    data = c.fetchone()
-    
-    if data:
-        c.execute("UPDATE reports SET count = count + 1, last_seen = ?, scammer_name = ? WHERE scammer_email = ?", (today, name, email))
-    else:
-        c.execute("INSERT INTO reports (scammer_email, scammer_name, count, last_seen) VALUES (?, ?, 1, ?)", (email, name, today))
-    conn.commit()
-    conn.close()
-
-# --- 5. DESIGN & MOTEUR DE RECHERCHE ---
-HTML_PAGE = """
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpamFW</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #ffffff; color: #2f3542; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        
-        .logo-container { text-align: center; margin-bottom: 30px; }
-        .site-logo { max-width: 250px; height: auto; }
-
-        .actions-box { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 30px; }
-        
-        .search-form { display: flex; gap: 5px; }
-        .search-input { padding: 10px; border: 1px solid #ced6e0; border-radius: 20px; outline: none; width: 200px; }
-        .search-btn { background: #2f3542; color: white; border: none; padding: 10px 15px; border-radius: 20px; cursor: pointer; }
-        
-        .update-btn { background: #ff4757; color: white; padding: 10px 20px; border-radius: 20px; text-decoration: none; font-weight: bold; border: none; cursor: pointer; }
-        .update-btn:hover { background: #ff6b81; }
-
-        .msg { text-align: center; margin-bottom: 20px; color: #2ed573; font-weight: bold; font-size: 0.9em; }
-        .filter-info { text-align: center; color: #a4b0be; margin-bottom: 10px; font-size: 0.8em; font-style: italic;}
-
-        .card { background: #f8f9fa; border: 1px solid #dfe4ea; margin-bottom: 10px; padding: 12px 20px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; }
-        .card:hover { border-color: #ff4757; }
-        
-        .name { font-weight: bold; font-size: 1em; color: #1a1a1a; }
-        .email { color: #747d8c; font-size: 0.85em; font-family: monospace; }
-        .stats { text-align: right; }
-        .count { font-weight: bold; color: #ff4757; font-size: 1.1em; }
-        .date { font-size: 0.7em; color: #a4b0be; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <div class="logo-container">
-        <a href="/"><img src="https://via.placeholder.com/250x80?text=SpamFW" alt="SpamFW" class="site-logo"></a>
-    </div>
-
-    <div class="actions-box">
-        <a href="/update" class="update-btn">🔄 Actualiser</a>
-
-        <form action="/" method="get" class="search-form">
-            <input type="text" name="q" class="search-input" placeholder="Chercher un mail..." value="{{ query }}">
-            <button type="submit" class="search-btn">🔍</button>
-        </form>
-    </div>
-
-    {% if msg %}
-        <div class="msg">{{ msg }}</div>
-    {% endif %}
-
-    {% if query %}
-        <p style="text-align:center;">Résultats pour : <b>{{ query }}</b> (<a href="/">Voir tout</a>)</p>
-    {% else %}
-        <div class="filter-info">Classement des 10 derniers jours (Top 100)</div>
-    {% endif %}
-
-    {% for row in rows %}
-    <div class="card">
-        <div>
-            <div class="name">{{ row[1] }}</div>
-            <div class="email">{{ row[0] }}</div>
-        </div>
-        <div class="stats">
-            <div class="count">{{ row[2] }}</div>
-            <div class="date">Vu le {{ row[3] }}</div>
-        </div>
-    </div>
-    {% endfor %}
-
-    {% if not rows %}
-        <p style="text-align:center; color:#a4b0be; margin-top:50px;">Aucun résultat trouvé.</p>
-    {% endif %}
-</div>
-
-</body>
-</html>
-"""
+# ... (Gardez votre variable HTML_PAGE) ...
 
 @app.route('/')
 def home():
-    init_db()
+    # Par sécurité, on peut aussi appeler init_db ici au cas où
+    # init_db() 
     query = request.args.get('q', '')
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     
-    if query:
-        sql = "SELECT * FROM reports WHERE scammer_email LIKE ? OR scammer_name LIKE ? ORDER BY count DESC"
-        c.execute(sql, ('%'+query+'%', '%'+query+'%'))
-    else:
-        c.execute("SELECT * FROM reports WHERE last_seen >= date('now', '-10 days') ORDER BY count DESC LIMIT 100")
+    # On vérifie si la table existe avant de requêter pour éviter le crash 500
+    try:
+        if query:
+            sql = "SELECT * FROM reports WHERE scammer_email LIKE ? OR scammer_name LIKE ? ORDER BY count DESC"
+            c.execute(sql, ('%'+query+'%', '%'+query+'%'))
+        else:
+            c.execute("SELECT * FROM reports WHERE last_seen >= date('now', '-10 days') ORDER BY count DESC LIMIT 100")
+        rows = c.fetchall()
+    except sqlite3.OperationalError:
+        # Si la table n'existe pas encore (cas rare), on renvoie une liste vide
+        init_db() # On tente de la créer pour la prochaine fois
+        rows = []
         
-    rows = c.fetchall()
     conn.close()
     return render_template_string(HTML_PAGE, rows=rows, query=query)
 
 @app.route('/update')
 def update():
+    # Ici, c'était votre point de crash
+    init_db() # ON FORCE LA CREATION SI BESOIN AVANT DE SCANNER
+    
     msg = check_mail_and_update()
+    
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    c.execute("SELECT * FROM reports WHERE last_seen >= date('now', '-10 days') ORDER BY count DESC LIMIT 100")
-    rows = c.fetchall()
+    try:
+        c.execute("SELECT * FROM reports WHERE last_seen >= date('now', '-10 days') ORDER BY count DESC LIMIT 100")
+        rows = c.fetchall()
+    except:
+        rows = []
     conn.close()
     return render_template_string(HTML_PAGE, rows=rows, msg=msg, query='')
 
 if __name__ == '__main__':
-    init_db()
-    # Koyeb a impérativement besoin de ça :
+    # Ceci ne sert que sur votre PC
     app.run(host='0.0.0.0', port=8080)
-
-
-
