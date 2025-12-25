@@ -12,10 +12,10 @@ DB_NAME = "propipo_live.db"
 # ==========================================
 # 🔧 VOS IDENTIFIANTS
 # ==========================================
-IMAP_SERVER = "imap-mail.outlook.com"
-EMAIL_USER = "spamfw@hotmail.com"
+IMAP_SERVER = "imap.gmail.com"
+EMAIL_USER = "themagnetstory@gmail.com"
 # ⚠️ REMETTEZ VOTRE MOT DE PASSE D'APPLICATION ICI
-EMAIL_PASSWORD = "ardcnaaoqilvpmqr" 
+EMAIL_PASSWORD = "jkvsotchhomqpzhj" 
 # ==========================================
 
 # --- 1. BASE DE DONNÉES ---
@@ -249,6 +249,7 @@ def update():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
+
 
 
 
