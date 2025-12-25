@@ -15,7 +15,7 @@ DB_NAME = "propipo_live.db"
 IMAP_SERVER = "imap-mail.outlook.com"
 EMAIL_USER = "spamfw@hotmail.com"
 # ⚠️ REMETTEZ VOTRE MOT DE PASSE D'APPLICATION ICI
-EMAIL_PASSWORD = "oxtgprzhozhbquep" 
+EMAIL_PASSWORD = "Azertyuiop01" 
 # ==========================================
 
 # --- 1. BASE DE DONNÉES ---
@@ -249,6 +249,7 @@ def update():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
+
 
 
 
